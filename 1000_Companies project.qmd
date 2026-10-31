@@ -1,0 +1,243 @@
+---
+title: "1000 Companies Profit Prediction Model"
+author: "Isaac Njuguna"
+date: "2026-10-29"
+format:
+  html:
+    theme: cosmo
+    toc: true
+    toc-depth: 3
+    toc-location: left
+    toc-title: "Contents"
+    number-sections: true
+    code-fold: true
+    code-summary: "Show code"
+    code-tools: true
+    page-layout: full
+    smooth-scroll: true
+    embed-resources: true
+execute:
+  eval: true
+  echo: true
+  warning: false
+  message: false
+ 
+---
+## Project overview
+When launching a new venture or allocating capital in an existing business, optimizing resource allocation across functional departments—such as Research & Development, Administration, and Marketing—is critical to maximizing return on investment. This project leverages data-driven insights and historical financial records from 1,000 corporate entities to model the underlying mathematical relationships between departmental expenditure, geographic location, and net profitability. By training a predictive regression model on this dataset, the project provides a reliable forecasting tool to estimate expected profits based on planned budget distributions.
+
+## Dataset Description
+The data comprises of historical operational and financial metrics recorded across 10000 bussiness,sctructured into five key variables:
+
+- R&D Spend:- Total financial expenditure dedicated to research and development activities
+
+- Administration:-costs associated with daily business operations, management salaries and administrative infrastructure
+
+- Marketing Spend:- Total capital allocated toward advertising, customer acquisition campaigns, brand management, and market expansion efforts.
+
+- State:- The geographic region or state in which the company maintains its primary operations, captured to evaluate regional economic impacts on profitability.
+
+- Profit:—Net financial gain achieved by the company, serving as the response metric for predictive modeling.
+
+## Project objective
+This project is to conduct a end-to-end data science workflow to analyze operational expenditure patterns and accurately forecast company profitability.
+
+## 1. Import Libraries & Setup
+In this section, we import the essential Python libraries required for data manipulation, exploratory data analysis, and machine learning modeling.
+
+```{python}
+#case implementation of linear regression
+#1)importing libraries
+import numpy as np
+import matplotlib.pyplot as plt
+import pandas as pd
+import seaborn as sns
+#tools needed to convert text into numbers
+from sklearn.preprocessing import LabelEncoder,OneHotEncoder
+from sklearn.compose import ColumnTransformer
+from sklearn.model_selection import train_test_split
+from sklearn.linear_model import LinearRegression
+from sklearn.metrics import r2_score
+import statsmodels.api as sm
+%matplotlib inline
+```
+## 2.Loading the data
+In this step,we tell Python exactly where to find our file on the computer and open. Then we split our data into two groups:the inputs(everything the company spends money on i.e R&D and marketing) and the output (the final profit we want to predict).We also take a quick look at the first few rows to make sure everything is loaded .
+```{python}
+#load the dataset and extract the independent and dependent variables
+file_path="data/1000_Companies.csv"
+
+# 3. Load the dataset into pandas
+companies = pd.read_csv(file_path)
+
+# 4. Extract independent (x) and dependent (y) variables
+#select all rows except the last column and convert the selected pandas dataframe to numpy array(independent var)
+x = companies.iloc[:, :-1].values  
+#depedent var(y) select all rows and column at index 4
+y = companies.iloc[:, 4].values   
+
+# 5. Preview the dataframe
+companies.head()
+```
+## 3.univariate analysis
+we evaluates each variable in isolation to understand its central tendency, spread, distribution shape, and presence of outliers.
+```{python}
+#Data Types Check
+print(companies.dtypes)
+```
+
+git config --global user.email "njugunaisaac2760@gmail.com"
+git config --global user.name "2760-izzo"
+
+git remote add https://github.com/2760-izzo/machine-_learning_project.git
+```{python}
+#histogram for all numerical columns
+companies.hist(bins=25, figsize=(10, 6), color='skyblue', edgecolor='black')
+plt.suptitle('Univariate Distributions of Financial Metrics', fontsize=14, fontweight='bold')
+plt.tight_layout()
+plt.show()
+```
+
+```{python}
+##Categorical variables(state)
+#Sorted count plot for State distribution
+plt.figure(figsize=(8, 4))
+ax = sns.countplot(
+    data=companies,
+    x='State',
+    order=companies['State'].value_counts().index,
+    hue='State',
+    palette='Blues_r',
+    legend=False,
+)
+plt.xticks(rotation=45)
+
+# Quick percentage annotation loop
+for p in ax.patches:
+    if (h := p.get_height()) > 0:
+        ax.annotate(
+            f'{h / len(companies) * 100:.1f}%',
+            (p.get_x() + p.get_width() / 2, h),
+            ha='center',
+            va='bottom',
+        )
+
+plt.show()
+```
+This sorted bar chart reveals which states hold the highest concentration of companies in our dataset, ensuring we are aware of any geographic bias in our sample.
+
+## 4.Bivariate analysis
+bivariate analysis explores the relationships and interactions between pairs of variables.
+```{python}
+#numeric var
+#Scatter plot: R&D Spend vs. Profit
+plt.figure(figsize=(8, 5))
+sns.scatterplot(
+    data=companies, x='R&D Spend', y='Profit', color='purple', alpha=0.7
+)
+plt.title('Relationship Between R&D Spend and Profit')
+plt.xlabel('R&D Spend')
+plt.ylabel('Profit')
+plt.show()
+
+# 2. Correlation Heatmap (Fixed by selecting only numerical columns)
+plt.figure(figsize=(8, 6))
+numeric_companies = companies.select_dtypes(
+    include=['number']
+)  # Ignores text columns like State
+sns.heatmap(numeric_companies.corr(),annot=True,cmap='coolwarm',fmt='.2f',linewidths=0.5,)
+plt.title('Correlation Matrix of Numerical Features')
+plt.show()
+```
+N/B:
+~The scatter plot show a strong positive linear trend;means that companies that invest more in R&D tend to secure significantly higher profits
+~the correlation matrix highlights which spending category has the strongest linear tie to financial return
+
+```{python}
+#categorical&numerical(state vs profit
+# Boxplot comparing Profit across different States
+plt.figure(figsize=(10, 5))
+sns.boxplot(data=companies, x='State', y='Profit', hue='State', palette='Set2', legend=False)
+plt.title('Profit Distribution Across Different States')
+plt.xlabel('State')
+plt.ylabel('Profit')
+plt.xticks(rotation=45)
+plt.show()
+```
+## 5.Multivariate analysis
+we examine the combined impact of multiple independent variables on our target variable.
+```{python}
+# Preparing data for OLS Regression
+X = companies[['R&D Spend', 'Administration', 'Marketing Spend']]
+X = sm.add_constant(X)  # Adds intercept
+y = companies['Profit']
+
+# Fit Ordinary Least Squares (OLS) model
+model = sm.OLS(y, X).fit()
+print(model.summary())
+```
+insights:
+The OLS Summary provides $p$-values and confidence intervals for each spending category. A $p$-value $< 0.05$ indicates that a specific variable has a statistically significant impact on profit.
+
+## 6.Machine learning(predictive model)
+we perform multiple linear regression on the dataset to predict profit
+### Encoding the categorical feature
+Machine learning models cannot read text values like 'state' names. This step converts the categorical State column into binary numerical columns (0s and 1s) while leaving the numeric spending columns untouched via remainder='passthrough'
+```{python}
+# Encoding categorical data
+Labelencoder = LabelEncoder()
+x[:, 3] = Labelencoder.fit_transform(x[:, 3])
+
+ct = ColumnTransformer(
+    transformers=[('encoder', OneHotEncoder(), [3])], remainder='passthrough'
+)
+x = ct.fit_transform(x)
+print(x)
+```
+N\B:this prevents the model from assuming a fake ranking order among states 
+
+### Avoiding the dummy variable trap
+here we drop one dummy column to prevent multicollinearity in regression model
+```{python}
+x=x[:,1:]
+x
+```
+OneHotEncoder() + x = x[:, 1:] manually creates 3 dummy columns and then drops the first one using array slicing.
+
+### splitting the data(train&test set)
+divide the data into two parts:20% of the data for evaluating the model performance on unseen data & 80% for training the regression model
+```{python}
+#rabdom_state=0----makes results reproducible
+x_train,x_test,y_train,y_test=train_test_split(x,y,test_size=0.2,random_state=0)
+```
+
+### Fitting multiple linear regression
+initialize and train the linear regression model using the training subset(x_train &y_train)
+```{python}
+#create model object
+regressor=LinearRegression()
+#force the model look at the indepe var(xtrain) and figure out the mathematical formula tht connects them to profit(ytrain)
+regressor.fit(x_train,y_train)
+```
+-Feature coef:the array represents the weight assigned to each of the line 4 independent features and showing the rate of change in profit for every unit increasing in a given feature
+-Model intercept:values serves as the baseline predicting profit when all features are zero
+-n-features:confirms the model successfully processed 4inputs
+
+### Predecting the test set results
+This step feeds the unseen testing feature (X_test) into our trained linear regression model.Then the model applies its learned mathematical weights (coefficients) to calculate and output an array of forecasted profit values (y_pred) for those companies.
+```{python}
+#predecting the test set results
+y_pred=regressor.predict(x_test)
+y_pred[:20]
+```
+insight:When you look at y_pred,you are seeing the model's best guess of each company's profit, calculated using only their spending and location which is completely separate from their real financial records.
+
+### Calculate the R squared value
+Measures the accuracy and goodness of fit of the model by comparing actual profits(y_tests) against the models test profit(y_pred)
+```{python}
+r2_score(y_test,y_pred)##successful model
+```
+The resulting score of 0.91155 indicates that approximately 91.16% of the variance in company profits is successfully explained by the model
+
+## 7.Conclusion
+This project successfully transformed raw corporate data into actionable business intelligence. Through thorough univariate and bivariate visualizations, we identified key spending behaviors. Furthermore, our multivariate regression and machine learning pipelines demonstrated that investment choices—particularly in R&D—are exceptionally reliable predictors of corporate profitability, offering clear strategic direction for future budget allocations.
